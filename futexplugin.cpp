@@ -21,6 +21,10 @@ int main(int argc, char* argv[]) {
   // Since the futexes are being shared between processes, we
   // subsequently use the "shared" futex operations (i.e., not the
   // ones suffixed "_PRIVATE")
+
+  /// shmget()/shmctl() would let you choose a random id that is shared
+  ///  between applications.  Then your clients do not have to be the result
+  ///  of a fork.  I have no idea if there is a Windows equivalent (been too long).
   void* addr = mmap(NULL, sizeof(SharedMem), PROT_READ | PROT_WRITE,
                     MAP_ANONYMOUS | MAP_SHARED, -1, 0);
   if (addr == MAP_FAILED) {
@@ -59,6 +63,9 @@ int main(int argc, char* argv[]) {
   auto endTime = clock.now();
   auto duration
     = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime-startTime);
+  /// serverSleeps and clientSleeps are neither atomic nor volatile.  How do you know
+  ///  they are valid at this point instead of still cached in a CPU register?
+  /// And I suspect the same is true for stopFlag.
   std::cout << "Time for " << nloops << " requests was " << duration.count()
             << " ns, that is, "
             << (long) (nloops / (duration.count() / 1000000000.0))
@@ -72,6 +79,7 @@ int main(int argc, char* argv[]) {
   size_t storeServerSleeps = shared->serverSleeps;
   size_t storeClientSleeps = shared->clientSleeps;
   std::vector<uint64_t> times;
+  /// why reserve 100 instead of 1000?
   times.reserve(100);
   for (int j = 0; j < 1000; ++j) {
     startTime = clock.now();
@@ -81,7 +89,7 @@ int main(int argc, char* argv[]) {
       std::cerr << "Alarm: wrong value for " << j << ": " << result
                 << std::endl;
     }
-    duration 
+    duration
       = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime-startTime);
     times.push_back(duration.count());
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
