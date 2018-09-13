@@ -49,6 +49,7 @@ struct SharedMem {
   /// I got confused twice because there is a function futex() and an
   ///  atomic object futex that is set via function calls.
   ///  Slightly different name maybe?  futexState?
+  /// Yes, this should be changed.
   std::atomic<int32_t> futex;
      // This is initially SERVER_SPINNING, indicating that the server spins
      // and no work has been submitted yet. The server
@@ -77,6 +78,17 @@ struct SharedMem {
       }
       /// stopFlag is within a tight loop, what if compiler
       ///  optimizes out its load?  need volatile or atomic.
+      /// This is an interesting point, in practice, this does not seem
+      /// to be necessary. I have intentionally made it so that the client
+      /// thread sets the stopFlag and then has a thread synchronization
+      /// point, since it submits work, in this case this is the discovery
+      /// of the true in stopFlag. I had thought that this is good enough.
+      /// After all, I also have not made input volatile or atomie, so 
+      /// with the same argument you could say that this loop could load
+      /// input outside of the loop! But so far I have failed to point
+      /// my finger to any paragraph in the standard which would support
+      /// this hypothesis. I think it is crucial that we answer this
+      /// question once and for all, but how?
       if (stopFlag) {
         alertClient();
         return;
