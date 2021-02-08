@@ -43,10 +43,14 @@ struct SharedMem {
     SERVER_SLEEPING = 1,
     CLIENT_SPINNING = 2,
     CLIENT_SLEEPING = 3,
-    WORK_DONE       = 4 
+    WORK_DONE       = 4
   };
 
-  std::atomic<int32_t> futex;   
+  /// I got confused twice because there is a function futex() and an
+  ///  atomic object futex that is set via function calls.
+  ///  Slightly different name maybe?  futexState?
+  /// Yes, this should be changed.
+  std::atomic<int32_t> futex;
      // This is initially SERVER_SPINNING, indicating that the server spins
      // and no work has been submitted yet. The server
      // is waiting for it to be set to CLIENT_SPINNING or CLIENT_SLEEPING
@@ -61,7 +65,7 @@ struct SharedMem {
   size_t serverSleeps;   // number of sleeps in server
   size_t clientSleeps;   // number of sleeps in client
 
-  SharedMem() 
+  SharedMem()
     : futex(0), input(0.0), output(0.0), stopFlag(false),
       serverSleeps(0), clientSleeps(0) {}
 
@@ -72,6 +76,19 @@ struct SharedMem {
       if (waitForWork()) {
         serverSleeps++;
       }
+      /// stopFlag is within a tight loop, what if compiler
+      ///  optimizes out its load?  need volatile or atomic.
+      /// This is an interesting point, in practice, this does not seem
+      /// to be necessary. I have intentionally made it so that the client
+      /// thread sets the stopFlag and then has a thread synchronization
+      /// point, since it submits work, in this case this is the discovery
+      /// of the true in stopFlag. I had thought that this is good enough.
+      /// After all, I also have not made input volatile or atomie, so 
+      /// with the same argument you could say that this loop could load
+      /// input outside of the loop! But so far I have failed to point
+      /// my finger to any paragraph in the standard which would support
+      /// this hypothesis. I think it is crucial that we answer this
+      /// question once and for all, but how?
       if (stopFlag) {
         alertClient();
         return;
@@ -100,6 +117,7 @@ struct SharedMem {
 
  private:
 
+  /// nice wrappers.
   bool waitForWork() {
     return waitFor(CLIENT_SPINNING, CLIENT_SLEEPING,
                    SERVER_SPINNING, SERVER_SLEEPING);
@@ -150,9 +168,9 @@ struct SharedMem {
       if (futex.compare_exchange_strong(current, sleeping,
                                         std::memory_order_relaxed)) {
         slept = true;
+        /// is this casting a 32 bit integer to 64 bit?
         ::futex((int*) &futex, FUTEX_WAIT, sleeping, NULL, NULL, 0);
       }
     }
   }
 };
-
